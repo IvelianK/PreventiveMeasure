@@ -116,6 +116,6 @@ def dispatch(subject: str, text: str, payload: dict | None = None, only: str | N
             for k, v in resolved(cfg).items():
                 if k in db.SECRET_FIELDS and isinstance(v, str) and len(v) >= 6:
                     err = err.replace(v, "***")
-            results.append({"channel": name, "ok": False, "error": err[:300]})
+            results.append({"channel": name, "ok": False, "error": "No se pudo enviar; consulta el registro."})
             db.log("error", f"Fallo enviando por {name}: {err}")
     return results

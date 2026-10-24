@@ -353,14 +353,19 @@ def apk_archive(p: Path) -> list[dict]:
     with zipfile.ZipFile(p) as z:
         for info in _zip_members(z):
             n = info.filename
-            m = re.match(r"^(?:base/root/)?META-INF/([\w.\-]+)_([\w.\-]+)\.version$", n)
-            if m:
+            if len(n) > 512:
+                continue
+            prefix = "base/root/META-INF/" if n.startswith("base/root/META-INF/") else "META-INF/"
+            if n.startswith(prefix) and n.endswith(".version"):
+                group, sep, artifact = n[len(prefix):-len(".version")].rpartition("_")
+                if not (sep and re.fullmatch(r"[\w.\-]+", group) and re.fullmatch(r"[\w.\-]+", artifact)):
+                    continue
                 with z.open(info) as f:  # lee 64 bytes, no descomprime el miembro entero (zip bomb)
                     ver = f.read(64).decode("utf-8", "ignore").strip()
                 if re.match(r"^\d", ver):
-                    out.append(comp("Maven", f"{m.group(1)}:{m.group(2)}", ver, str(p)))
-            elif re.match(r"^(?:base/)?lib/[^/]+/lib(\w+)\.so$", n):
-                lib = re.match(r"^.*lib(\w+)\.so$", n).group(1)
+                    out.append(comp("Maven", f"{group}:{artifact}", ver, str(p)))
+            elif m := re.fullmatch(r"(?:base/)?lib/[^/]{1,128}/lib([A-Za-z0-9_]{1,128})\.so", n):
+                lib = m.group(1)
                 if lib in ("ssl", "crypto", "sqlite", "curl", "flutter", "reactnativejni", "hermes"):
                     out.append(cpe_comp(lib, "", str(p)))  # sin versión: solo inventario
     return out

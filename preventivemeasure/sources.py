@@ -30,17 +30,30 @@ def check_url(url: str, allow_private: bool = True) -> None:
     p = urllib.parse.urlsplit(url)
     if p.scheme not in ("http", "https") or not p.hostname:
         raise ValueError(f"URL no permitida: {p.scheme}://{p.hostname or ''}")
+    host = p.hostname.rstrip(".")
+    if host.lower() == "metadata.google.internal":
+        raise ValueError("Destino de metadatos bloqueado")
+
+    def reject_ip(address: str) -> None:
+        ip = ipaddress.ip_address(address.split("%")[0])
+        ip = getattr(ip, "ipv4_mapped", None) or ip
+        if any(ip in n for n in ALWAYS_BLOCKED) or (not allow_private and not ip.is_global):
+            raise ValueError(f"Destino bloqueado: {host} -> {ip}")
+
+    try:
+        literal = ipaddress.ip_address(host.split("%")[0])
+    except ValueError:
+        pass
+    else:
+        reject_ip(str(literal))  # también con HTTP(S)_PROXY: el proxy podría acceder a esa IP
     if urllib.request.getproxies().get(p.scheme):
         return  # el proxy resuelve el DNS: validar aquí bloquearía todo en redes corporativas
     try:
-        infos = socket.getaddrinfo(p.hostname, p.port or (443 if p.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
+        infos = socket.getaddrinfo(host, p.port or (443 if p.scheme == "https" else 80), proto=socket.IPPROTO_TCP)
     except socket.gaierror:
         return  # urlopen dará el error de red real
     for *_, sa in infos:
-        ip = ipaddress.ip_address(sa[0].split("%")[0])
-        ip = getattr(ip, "ipv4_mapped", None) or ip
-        if any(ip in n for n in ALWAYS_BLOCKED) or (not allow_private and not ip.is_global):
-            raise ValueError(f"Destino bloqueado: {p.hostname} -> {ip}")
+        reject_ip(sa[0])
     # ponytail: TOCTOU por DNS rebinding entre comprobar y conectar; fijar la IP en la conexión si el modelo lo exige
 
 

@@ -308,3 +308,36 @@ def test_scan_roots(monkeypatch, tmp_path):
     assert not manifests.path_allowed(str(tmp_path / "other"))
     monkeypatch.delenv("PM_SCAN_ROOTS")
     assert manifests.path_allowed(str(tmp_path / "other"))
+
+
+def test_apk_names_with_overlapping_separators(tmp_path):
+    import zipfile
+
+    apk = tmp_path / "hostile.apk"
+    with zipfile.ZipFile(apk, "w") as z:
+        z.writestr("META-INF/" + "-_" * 2000 + ".version", "1.0")
+        z.writestr("lib/x/lib" + "liba" * 2000 + ".so", "")
+    assert manifests.apk_archive(apk) == []
+
+
+def test_metadata_ips_blocked_even_with_proxy(monkeypatch):
+    import pytest
+    import urllib.request
+
+    monkeypatch.setattr(urllib.request, "getproxies", lambda: {"http": "http://proxy.example:3128"})
+    for url in ("http://169.254.169.254/latest/meta-data/", "http://[::ffff:169.254.169.254]/"):
+        with pytest.raises(ValueError):
+            sources.check_url(url, allow_private=True)
+
+
+def test_notification_errors_do_not_return_transport_details(monkeypatch):
+    recorded = []
+    config = {"enabled": True, "url": "https://example.invalid/private-hook"}
+    monkeypatch.setattr(db, "channels", lambda: {"webhook": config})
+    monkeypatch.setattr(db, "log", lambda level, message: recorded.append(message))
+    def broken_send(*_args):
+        raise RuntimeError(config["url"])
+    monkeypatch.setattr(notify, "send", broken_send)
+    result = notify.dispatch("prueba", "mensaje")
+    assert result == [{"channel": "webhook", "ok": False, "error": "No se pudo enviar; consulta el registro."}]
+    assert "private-hook" not in recorded[0]

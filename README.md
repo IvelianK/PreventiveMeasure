@@ -95,7 +95,7 @@ En el primer arranque el token generado aparece en los registros del contenedor.
 - Escucha en `127.0.0.1` por defecto, con validación de cabecera `Host` contra DNS rebinding. Para recibir agentes remotos, ponlo detrás de un proxy inverso con TLS y define `PM_ALLOWED_HOSTS`.
 - API con token Bearer (comparación en tiempo constante); en la BD solo el hash SHA-256 del token de administración. Token de agente separado y de alcance mínimo. Los intentos con token no válido quedan en el registro, agregados por IP y minuto.
 - Cuerpos de petición limitados antes de leerse (1 MB general, 32 MB agente, 300 MB subidas).
-- Salidas HTTP con tope de tamaño y de tiempo total; redirecciones validadas en cada salto; metadatos cloud (`169.254.169.254` y similares) bloqueados siempre; los feeds solo pueden ir a IPs públicas.
+- Salidas HTTP con tope de tamaño y tiempo; redirecciones validadas en cada salto. Se bloquean IPs literales de metadatos cloud y, sin proxy, las direcciones detectadas por DNS. Esta validación no sustituye a las reglas de salida de red: un proxy o un cambio de DNS entre validación y conexión pueden eludirla.
 - XML con DTD interna rechazado (billion laughs); APK/IPA leídos sin descomprimir miembros enteros (zip bombs); expresiones regulares acotadas contra ReDoS; manifiestos de más de 50 MB (100 MB SBOM) descartados.
 - Un inventario parcial (fichero ilegible, recorrido truncado) nunca da por resueltas vulnerabilidades.
 - `subprocess` solo con rutas absolutas fuera del directorio de trabajo, sin `.bat`/`.cmd` en Windows.
@@ -112,6 +112,8 @@ En el primer arranque el token generado aparece en los registros del contenedor.
 - La detección web es pasiva: si el servidor oculta versiones, se inventaría el producto sin versión y se vigila por noticias y CVE sin analizar.
 - La comparación de versiones de NVD es genérica (no semántica por ecosistema); OSV compara en su servidor con la semántica exacta.
 - El nombre CPE de programas de escritorio se deduce; si no coincide con NVD, corrígelo en *Componentes > CPE* y la corrección se recuerda.
+- El token de agente es compartido. Si un agente queda comprometido, podría suplantar a otro equipo y enviar un inventario falso. Limita el acceso al token, usa TLS y rota el token ante sospechas.
+- Un administrador puede solicitar escaneos de rutas del servidor. Define `PM_SCAN_ROOTS` si el panel se usa fuera de un equipo de confianza.
 
 ## Tests
 
