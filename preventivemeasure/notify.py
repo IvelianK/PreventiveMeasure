@@ -2,16 +2,19 @@
 import base64
 import hashlib
 import hmac
+import http.client
+import ipaddress
 import json
+import os
 import smtplib
+import socket
 import ssl
 import string
 import urllib.parse
-import urllib.request
 from email.message import EmailMessage
 
 from . import db
-from .sources import open_url
+from .sources import ALWAYS_BLOCKED
 
 UA = {"User-Agent": "PreventiveMeasure/1.0"}
 
@@ -20,11 +23,54 @@ def render(template: str, ctx: dict) -> str:
     return string.Template(template).safe_substitute({k: "" if v is None else v for k, v in ctx.items()})
 
 
+def _request(method: str, url: str, body: bytes | None, headers: dict, timeout: int = 20) -> None:
+    """Conecta a una IP validada una sola vez, sin proxy ni redirecciones."""
+    if not isinstance(url, str) or url != url.strip() or any(ord(ch) < 32 for ch in url):
+        raise ValueError("URL de aviso no válida")
+    parsed = urllib.parse.urlsplit(url)
+    private = os.environ.get("PM_ALLOW_PRIVATE_NOTIFICATIONS") == "1"
+    if (parsed.scheme != "https" and not (private and parsed.scheme == "http")) or not parsed.hostname:
+        raise ValueError("Los avisos requieren HTTPS; HTTP privado exige PM_ALLOW_PRIVATE_NOTIFICATIONS=1")
+    if parsed.username or parsed.password or parsed.hostname.rstrip(".").lower() == "metadata.google.internal":
+        raise ValueError("Destino de aviso no permitido")
+    host = parsed.hostname.encode("idna").decode("ascii")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    selected = None
+    for family, kind, protocol, _, address in addresses:
+        ip = ipaddress.ip_address(address[0].split("%")[0])
+        ip = getattr(ip, "ipv4_mapped", None) or ip
+        if (any(ip in network for network in ALWAYS_BLOCKED) or (not private and not ip.is_global)
+                or (parsed.scheme == "http" and ip.is_global)):
+            raise ValueError("Destino de aviso bloqueado")
+        if selected is None:
+            selected = family, kind, protocol, address
+    if selected is None:
+        raise ValueError("Destino de aviso sin direcciones")
+
+    family, kind, protocol, address = selected
+    raw = socket.socket(family, kind, protocol)
+    connection = http.client.HTTPConnection(host, port, timeout=timeout)
+    try:
+        raw.settimeout(timeout)
+        raw.connect(address)  # la IP conectada es exactamente la validada; no se resuelve de nuevo
+        connection.sock = (ssl.create_default_context().wrap_socket(raw, server_hostname=host)
+                           if parsed.scheme == "https" else raw)
+        path = parsed.path or "/"
+        if parsed.query:
+            path += "?" + parsed.query
+        connection.request(method, path, body=body, headers={**UA, **headers})
+        response = connection.getresponse()
+        if response.status >= 300:  # no seguir redirecciones hacia la red interna
+            raise RuntimeError(f"El destino de aviso respondió HTTP {response.status}")
+        response.read(1024)
+    finally:
+        connection.close()
+        raw.close()
+
+
 def _post(url: str, body: bytes, headers: dict, timeout: int = 20) -> None:
-    # Destinos de LAN permitidos (ntfy, webhooks internos); metadatos cloud bloqueados siempre
-    req = urllib.request.Request(url, data=body, headers={**UA, **headers}, method="POST")
-    with open_url(req, timeout, allow_private=True) as r:
-        r.read(1024)
+    _request("POST", url, body, headers, timeout)
 
 
 def _json(url: str, payload: dict, headers: dict | None = None) -> None:
@@ -69,9 +115,7 @@ def send(name: str, cfg: dict, subject: str, text: str, payload: dict | None = N
         case "whatsapp_callmebot":
             for part in _chunks(f"*{subject}*\n\n{text}", 1500):
                 q = urllib.parse.urlencode({"phone": s["phone"], "text": part, "apikey": s["apikey"]})
-                req = urllib.request.Request(f"https://api.callmebot.com/whatsapp.php?{q}", headers=UA)
-                with open_url(req, 30) as r:
-                    r.read(1024)
+                _request("GET", f"https://api.callmebot.com/whatsapp.php?{q}", None, {}, 30)
         case "discord":
             for part in _chunks(f"**{subject}**\n{text}", 1900):
                 # Los resúmenes de CVE y titulares son de terceros: sin @everyone/@here inyectados
