@@ -1,9 +1,20 @@
 # Seguridad
 
-Comunica las vulnerabilidades de PreventiveMeasure mediante la opción privada
-[Report a vulnerability](https://github.com/IvelianK/PreventiveMeasure/security/advisories/new)
-del repositorio. Incluye el componente afectado, los pasos de reproducción y
-el posible impacto. No publiques detalles explotables en una incidencia pública.
+## Versiones con soporte
 
-El inventario, los tokens y la base de datos de una instalación deben permanecer
-en su entorno privado. Si un secreto se filtra, revócalo en su proveedor y rótalo.
+| Versión | Correcciones de seguridad |
+|---|---|
+| 1.0.x | Sí |
+| Anteriores | No |
+
+## Comunicar una vulnerabilidad
+
+Usa [Report a vulnerability](https://github.com/IvelianK/PreventiveMeasure/security/advisories/new)
+para enviar un informe privado. Indica la versión, el componente afectado, pasos de
+reproducción con datos sintéticos y el posible impacto. No publiques detalles
+explotables en una incidencia ni adjuntes tokens, inventarios o registros reales.
+
+Si un secreto de tu instalación se filtra, revócalo en su proveedor y rótalo.
+La base de datos, los inventarios, los nombres de equipos y las copias de seguridad
+deben permanecer en un entorno privado. Consulta también las limitaciones de
+seguridad descritas en el README antes de exponer el panel a una red.

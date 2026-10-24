@@ -28,39 +28,41 @@ La prioridad combina CVSS, KEV, EPSS y la confianza del cruce. Cada hallazgo tra
 
 ## Instalación
 
-Requiere Python 3.11 o superior. Lo más sencillo es [pipx](https://pipx.pypa.io), que lo instala aislado y deja el comando en el PATH:
+Requiere Python 3.11 o superior. Si ya tienes [pipx](https://pipx.pypa.io), instala la versión publicada en un solo comando:
 
 ```bash
 pipx install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
 ```
 
-Sin pipx, en un entorno virtual (en Windows el activador es `.venv\Scripts\activate`):
+Sin pipx, crea un entorno virtual. En **Windows PowerShell** (`py` es el lanzador de Python):
 
-```bash
-python -m venv .venv
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
+.\.venv\Scripts\preventivemeasure.exe serve
 ```
 
-```bash
-source .venv/bin/activate
-```
+En **Linux o macOS**:
 
 ```bash
-python -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
+python3 -m venv .venv
+.venv/bin/python -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
+.venv/bin/preventivemeasure serve
 ```
 
-Desde el código fuente:
+Esos comandos arrancan el panel. Abre <http://127.0.0.1:8765> y usa el token mostrado en el primer arranque. Guarda el token en un gestor de contraseñas. Los datos se crean en `./data` del directorio desde el que ejecutes el comando.
+
+Para instalar desde el código, clona el repositorio y, dentro de su carpeta, sustituye la URL del wheel de los comandos anteriores por `.`:
 
 ```bash
 git clone https://github.com/IvelianK/PreventiveMeasure.git
+cd PreventiveMeasure
 ```
 
-```bash
-cd PreventiveMeasure && python -m pip install .
-```
-
-Cada release lleva atestación de procedencia de GitHub. Para comprobar que el wheel se construyó en este repositorio:
+Cada release lleva una atestación de procedencia de GitHub. Para comprobar el wheel descargado necesitas [GitHub CLI](https://cli.github.com):
 
 ```bash
+gh release download v1.0.0 -R IvelianK/PreventiveMeasure -p 'preventivemeasure-1.0.0-py3-none-any.whl'
 gh attestation verify preventivemeasure-1.0.0-py3-none-any.whl -R IvelianK/PreventiveMeasure
 ```
 

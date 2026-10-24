@@ -267,10 +267,10 @@ def _new_target(name: str, kind: str, location: str, meta: dict | None = None) -
 def add_target(t: TargetIn):
     match t.kind:
         case "path":
-            if not Path(t.location).exists():
-                raise HTTPException(400, "La ruta no existe en el servidor")
             if not manifests.path_allowed(t.location):
                 raise HTTPException(400, "Ruta fuera de PM_SCAN_ROOTS")
+            if not Path(t.location).exists():
+                raise HTTPException(400, "La ruta no existe en el servidor")
         case "url":
             if not re.match(r"^https?://[^\s/]+", t.location):
                 raise HTTPException(400, "URL no válida (http/https)")
@@ -319,13 +319,19 @@ def delete_target(tid: int):
     t = db.rows("SELECT * FROM targets WHERE id=?", (tid,))
     if not t:
         raise HTTPException(404)
+    stored = None
+    if t[0]["kind"] == "upload":
+        stored = Path(t[0]["location"])
+        uploads = (db.DATA_DIR / "uploads").resolve()
+        resolved = stored.resolve()
+        if resolved == uploads or not resolved.is_relative_to(uploads):
+            raise HTTPException(400, "Ruta de subida fuera de data/uploads")
     with db.conn() as c:
         c.execute("DELETE FROM findings WHERE component_id IN (SELECT id FROM components WHERE target_id=?)", (tid,))
         c.execute("DELETE FROM targets WHERE id=?", (tid,))
-    if t[0]["kind"] == "upload":
-        stored = Path(t[0]["location"])
+    if stored is not None:
         stored.unlink(missing_ok=True)
-        if stored.parent.parent == db.DATA_DIR / "uploads":  # carpeta propia de la subida (formato actual)
+        if stored.parent.parent == uploads and re.fullmatch(r"[0-9a-f]{32}", stored.parent.name):
             stored.parent.rmdir()
     return {"ok": True}
 

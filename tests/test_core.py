@@ -361,3 +361,21 @@ def test_upload_never_uses_client_filename():
         assert client.delete(f"/api/targets/{db.rows('SELECT id FROM targets WHERE kind=?', ('upload',))[0]['id']}",
                              headers=h).status_code == 200
         assert not stored.parent.exists()
+
+
+def test_delete_upload_rejects_paths_outside_data(tmp_path):
+    import pytest
+    from fastapi import HTTPException
+    from preventivemeasure.api import delete_target
+
+    db.init()
+    outside = tmp_path / "keep.txt"
+    outside.write_text("no borrar", encoding="utf-8")
+    with db.conn() as c:
+        tid = c.execute("INSERT INTO targets(name, kind, location, created_at) VALUES(?,?,?,0)",
+                        ("fuera", "upload", str(outside))).lastrowid
+    with pytest.raises(HTTPException) as error:
+        delete_target(tid)
+    assert error.value.status_code == 400
+    assert outside.read_text(encoding="utf-8") == "no borrar"
+    assert db.rows("SELECT id FROM targets WHERE id=?", (tid,))
