@@ -31,14 +31,14 @@ La prioridad combina CVSS, KEV, EPSS y la confianza del cruce. Cada hallazgo tra
 Requiere Python 3.11 o superior. Si ya tienes [pipx](https://pipx.pypa.io), instala la versión publicada en un solo comando:
 
 ```bash
-pipx install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
+pipx install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.1/preventivemeasure-1.0.1-py3-none-any.whl
 ```
 
 Sin pipx, crea un entorno virtual. En **Windows PowerShell** (`py` es el lanzador de Python):
 
 ```powershell
 py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
+.\.venv\Scripts\python.exe -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.1/preventivemeasure-1.0.1-py3-none-any.whl
 .\.venv\Scripts\preventivemeasure.exe serve
 ```
 
@@ -46,7 +46,7 @@ En **Linux o macOS**:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
+.venv/bin/python -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.1/preventivemeasure-1.0.1-py3-none-any.whl
 .venv/bin/preventivemeasure serve
 ```
 
@@ -62,8 +62,8 @@ cd PreventiveMeasure
 Cada release lleva una atestación de procedencia de GitHub. Para comprobar el wheel descargado necesitas [GitHub CLI](https://cli.github.com):
 
 ```bash
-gh release download v1.0.0 -R IvelianK/PreventiveMeasure -p 'preventivemeasure-1.0.0-py3-none-any.whl'
-gh attestation verify preventivemeasure-1.0.0-py3-none-any.whl -R IvelianK/PreventiveMeasure
+gh release download v1.0.1 -R IvelianK/PreventiveMeasure -p 'preventivemeasure-1.0.1-py3-none-any.whl'
+gh attestation verify preventivemeasure-1.0.1-py3-none-any.whl -R IvelianK/PreventiveMeasure
 ```
 
 ## Uso
@@ -94,9 +94,12 @@ Los campos secretos de los canales (contraseñas, tokens, URLs de webhook, topic
 |---|---|
 | `PM_DATA` | Carpeta de datos (por defecto `./data`) |
 | `PM_ADMIN_TOKEN` | Token de administración fijo en vez del generado |
-| `PM_SCAN_ROOTS` | Carpetas permitidas para activos de tipo ruta, separadas por `;` (Windows) o `:` (Unix). Vacío = sin límite |
+| `PM_SCAN_ROOTS` | Carpetas permitidas para activos de tipo ruta, separadas por `;` (Windows) o `:` (Unix). Vacío = rutas del panel desactivadas; `check` y `agent --path` locales siguen disponibles |
 | `PM_ALLOWED_HOSTS` | Nombres de host aceptados cuando el panel escucha en red (en loopback se fija solo) |
 | `PM_AGENT_TOKEN` | Token del agente remoto (mejor que `--token`, que se ve en la lista de procesos) |
+| `PM_ALLOW_PRIVATE_NOTIFICATIONS` | `1` permite avisos a redes privadas y HTTP solo hacia esas redes; úsalo únicamente con destinos internos de confianza |
+
+Para vigilar una carpeta desde el panel, define `PM_SCAN_ROOTS` antes de iniciar el servidor. Ejemplo en PowerShell: `$env:PM_SCAN_ROOTS='Z:\GITHUB'`; en Linux/macOS: `export PM_SCAN_ROOTS=/srv/proyectos`. Los activos de tipo ruta ya guardados conservan su inventario, pero no vuelven a escanearse hasta configurar una raíz que los incluya. Los enlaces simbólicos dentro de un proyecto se omiten y dejan el inventario como parcial.
 
 ### Agente remoto
 
@@ -125,13 +128,14 @@ docker run -d -p 127.0.0.1:8765:8765 -v pm-data:/data -e PM_ALLOWED_HOSTS=127.0.
 ```
 
 En el primer arranque el token generado aparece en los registros del contenedor. Restringe el acceso a esos registros, guárdalo en un gestor de contraseñas y rótalo si se expone. Puedes configurar `PM_ADMIN_TOKEN` mediante un fichero de entorno excluido de Git.
+Para monitorizar carpetas del anfitrión desde Docker, móntalas en modo lectura y define `PM_SCAN_ROOTS` con la ruta **dentro** del contenedor, por ejemplo `-v /srv/proyectos:/projects:ro -e PM_SCAN_ROOTS=/projects`.
 
 ## Seguridad del propio monitor
 
 - Escucha en `127.0.0.1` por defecto, con validación de cabecera `Host` contra DNS rebinding. Para recibir agentes remotos, ponlo detrás de un proxy inverso con TLS y define `PM_ALLOWED_HOSTS`.
 - API con token Bearer (comparación en tiempo constante); en la BD solo el hash SHA-256 del token de administración. Token de agente separado y de alcance mínimo. Los intentos con token no válido quedan en el registro, agregados por IP y minuto.
 - Cuerpos de petición limitados antes de leerse (1 MB general, 32 MB agente, 300 MB subidas).
-- Salidas HTTP con tope de tamaño y tiempo; redirecciones validadas en cada salto. Se bloquean IPs literales de metadatos cloud y, sin proxy, las direcciones detectadas por DNS. Esta validación no sustituye a las reglas de salida de red: un proxy o un cambio de DNS entre validación y conexión pueden eludirla.
+- Avisos HTTP(S) enviados directamente a una IP validada, sin proxy ni redirecciones; por defecto, solo HTTPS hacia IPs públicas. `PM_ALLOW_PRIVATE_NOTIFICATIONS=1` habilita destinos internos de forma explícita. Los feeds y la detección web validan cada redirección, pero siguen necesitando reglas de salida de red si un proxy o un cambio de DNS puede eludir la validación.
 - XML con DTD interna rechazado (billion laughs); APK/IPA leídos sin descomprimir miembros enteros (zip bombs); expresiones regulares acotadas contra ReDoS; manifiestos de más de 50 MB (100 MB SBOM) descartados.
 - Un inventario parcial (fichero ilegible, recorrido truncado) nunca da por resueltas vulnerabilidades.
 - `subprocess` solo con rutas absolutas fuera del directorio de trabajo, sin `.bat`/`.cmd` en Windows.
@@ -149,7 +153,7 @@ En el primer arranque el token generado aparece en los registros del contenedor.
 - La comparación de versiones de NVD es genérica (no semántica por ecosistema); OSV compara en su servidor con la semántica exacta.
 - El nombre CPE de programas de escritorio se deduce; si no coincide con NVD, corrígelo en *Componentes > CPE* y la corrección se recuerda.
 - El token de agente es compartido. Si un agente queda comprometido, podría suplantar a otro equipo y enviar un inventario falso. Limita el acceso al token, usa TLS y rota el token ante sospechas.
-- Un administrador puede solicitar escaneos de rutas del servidor. Define `PM_SCAN_ROOTS` si el panel se usa fuera de un equipo de confianza.
+- Los escaneos de rutas solicitados desde el panel requieren `PM_SCAN_ROOTS`; acota su valor a los proyectos necesarios. Las subidas y el escaneo local de la CLI no requieren esa variable.
 
 ## Tests
 

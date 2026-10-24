@@ -13,6 +13,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
+from . import db
+
 SKIP_DIRS = {"node_modules", ".git", ".hg", ".svn", "venv", ".venv", "env", "__pycache__", ".tox", "dist",
              "build", "target", ".gradle", ".idea", "Pods", "DerivedData", ".next", ".nuxt", "vendor", ".dart_tool"}
 MAX_FILES = 20000
@@ -455,13 +457,18 @@ def _read_text(p: Path, limit: int = MAX_TEXT) -> str:
     return p.read_text(encoding="utf-8", errors="replace")
 
 
-def path_allowed(path: str) -> bool:
-    """PM_SCAN_ROOTS (separado por os.pathsep) acota qué rutas del servidor se pueden escanear. Vacío = sin límite."""
+def scoped_path(path: str) -> Path | None:
+    """Ruta canónica dentro de PM_SCAN_ROOTS; sin raíces, el panel no puede leer rutas del servidor."""
     roots = [r for r in os.environ.get("PM_SCAN_ROOTS", "").split(os.pathsep) if r.strip()]
     if not roots:
-        return True
+        return None
     norm = lambda p: Path(os.path.normcase(os.path.realpath(p)))  # Windows: sin distinguir mayúsculas
-    return any(norm(path).is_relative_to(norm(r)) for r in roots)
+    candidate = norm(path)
+    return candidate if any(candidate.is_relative_to(norm(r)) for r in roots) else None
+
+
+def path_allowed(path: str) -> bool:
+    return scoped_path(path) is not None
 
 
 def _wanted(name: str) -> bool:
@@ -470,8 +477,12 @@ def _wanted(name: str) -> bool:
 
 def scan_path(root: str) -> tuple[list[dict], list[str]]:
     """Recorre un proyecto. Devuelve (componentes, errores); con errores el inventario se trata como parcial."""
-    base = Path(root)
+    base = Path(root).resolve()
     out, errors, files = [], [], []
+    roots = [r for r in os.environ.get("PM_SCAN_ROOTS", "").split(os.pathsep) if r.strip()]
+    uploads = (db.DATA_DIR / "uploads").resolve()
+    if roots and not (path_allowed(str(base)) or base.is_relative_to(uploads)):
+        return [], [f"{root}: fuera de PM_SCAN_ROOTS, no se escanea"]
     if base.is_file():
         files = [base]
     elif not base.is_dir():
@@ -479,7 +490,10 @@ def scan_path(root: str) -> tuple[list[dict], list[str]]:
     else:
         walked = 0
         for dirpath, dirnames, filenames in os.walk(base):
-            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]  # poda: no entra en node_modules & co.
+            for d in dirnames:
+                if d not in SKIP_DIRS and (Path(dirpath) / d).is_symlink():
+                    errors.append(f"{Path(dirpath) / d}: enlace simbólico omitido")
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not (Path(dirpath) / d).is_symlink()]
             walked += len(dirnames) + len(filenames)
             files += [Path(dirpath, f) for f in filenames if _wanted(f)]
             if walked >= MAX_WALK or len(files) >= MAX_FILES:
@@ -488,6 +502,9 @@ def scan_path(root: str) -> tuple[list[dict], list[str]]:
     has_lock = {f.parent for f in files if f.name in LOCKS}
     for f in files:
         try:
+            if f.is_symlink() or (roots and not f.resolve().is_relative_to(base)):
+                errors.append(f"{f}: enlace o ruta fuera del proyecto, no se analiza")
+                continue
             if f.name != "package.json":
                 out.extend(scan_file(f))
             elif f.parent not in has_lock:  # package.json solo si no hay lockfile al lado

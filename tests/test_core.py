@@ -287,10 +287,11 @@ def test_env_secrets_never_expose_monitor_tokens(monkeypatch):
     assert notify.resolved({"server": "env:TG_TOKEN", "token": "env:TG_TOKEN"}) == {"server": "env:TG_TOKEN", "token": "123:abc"}
 
 
-def test_partial_scan_does_not_resolve_findings(tmp_path):
+def test_partial_scan_does_not_resolve_findings(tmp_path, monkeypatch):
     db.init()
     proj = tmp_path / "proj"
     proj.mkdir()
+    monkeypatch.setenv("PM_SCAN_ROOTS", str(proj))
     (proj / "Dockerfile").write_text("FROM php:8.1.2\n")
     with db.conn() as c:
         tid = c.execute("INSERT INTO targets(name, kind, location, created_at) VALUES('p','path',?,0)", (str(proj),)).lastrowid
@@ -303,11 +304,126 @@ def test_partial_scan_does_not_resolve_findings(tmp_path):
 
 
 def test_scan_roots(monkeypatch, tmp_path):
-    monkeypatch.setenv("PM_SCAN_ROOTS", str(tmp_path / "allowed"))
+    from fastapi import HTTPException
+    from preventivemeasure.api import TargetIn, add_target
+    import pytest
+
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    monkeypatch.setenv("PM_SCAN_ROOTS", str(allowed))
     assert manifests.path_allowed(str(tmp_path / "allowed" / "app"))
     assert not manifests.path_allowed(str(tmp_path / "other"))
+    assert not manifests.path_allowed(str(allowed / ".." / "other"))
     monkeypatch.delenv("PM_SCAN_ROOTS")
-    assert manifests.path_allowed(str(tmp_path / "other"))
+    assert not manifests.path_allowed(str(allowed))
+    with pytest.raises(HTTPException) as error:
+        add_target(TargetIn(name="prohibido", kind="path", location=str(allowed)))
+    assert error.value.status_code == 400
+
+
+def test_scan_skips_symlinks_outside_project(monkeypatch, tmp_path):
+    import pytest
+
+    project = tmp_path / "project"
+    project.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "requirements.txt").write_text("django==3.2.0\n", encoding="utf-8")
+    try:
+        (project / "requirements.txt").symlink_to(outside / "requirements.txt")
+    except OSError:
+        pytest.skip("Este Windows no permite crear enlaces simbólicos")
+    monkeypatch.setenv("PM_SCAN_ROOTS", str(project))
+    components, errors = manifests.scan_path(str(project))
+    assert not components and errors
+    assert not manifests.path_allowed(str(project / "requirements.txt"))
+
+
+def test_notification_post_blocks_private_by_default_and_does_not_redirect(monkeypatch):
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    import pytest
+
+    received = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            received.append(self.path)
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(302 if self.path == "/redirect" else 200)
+            if self.path == "/redirect":
+                self.send_header("Location", "http://169.254.169.254/latest/meta-data/")
+            self.end_headers()
+
+        def do_GET(self):
+            received.append("GET " + self.path)
+            self.send_response(302)
+            self.send_header("Location", "http://169.254.169.254/latest/meta-data/")
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}"
+    try:
+        monkeypatch.delenv("PM_ALLOW_PRIVATE_NOTIFICATIONS", raising=False)
+        with pytest.raises(ValueError):
+            notify._post(url + "/ok", b"prueba", {})
+        monkeypatch.setenv("PM_ALLOW_PRIVATE_NOTIFICATIONS", "1")
+        notify._post(url + "/ok", b"prueba", {})
+        with pytest.raises(RuntimeError, match="HTTP 302"):
+            notify._post(url + "/redirect", b"prueba", {})
+        with pytest.raises(RuntimeError, match="HTTP 302"):
+            notify._request("GET", url + "/redirect", None, {})
+        with pytest.raises(ValueError):
+            notify._post("http://169.254.169.254/latest/meta-data/", b"prueba", {})
+        assert received == ["/ok", "/redirect", "GET /redirect"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_notification_post_uses_the_validated_dns_address(monkeypatch):
+    import socket
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    hosts = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            hosts.append(self.headers["Host"])
+            self.rfile.read(int(self.headers["Content-Length"]))
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    original = socket.getaddrinfo
+    lookups = []
+
+    def resolve(host, port, **kwargs):
+        lookups.append(host)
+        assert host == "safe.test"
+        return original("127.0.0.1", port, **kwargs)
+
+    try:
+        monkeypatch.setenv("PM_ALLOW_PRIVATE_NOTIFICATIONS", "1")
+        monkeypatch.setattr(notify.socket, "getaddrinfo", resolve)
+        notify._post(f"http://safe.test:{server.server_port}/hook", b"prueba", {})
+        assert lookups == ["safe.test"] and hosts == [f"safe.test:{server.server_port}"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_apk_names_with_overlapping_separators(tmp_path):

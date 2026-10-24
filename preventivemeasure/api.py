@@ -265,16 +265,19 @@ def _new_target(name: str, kind: str, location: str, meta: dict | None = None) -
 
 @app.post("/api/targets", dependencies=A)
 def add_target(t: TargetIn):
+    location = t.location
     match t.kind:
         case "path":
-            if not manifests.path_allowed(t.location):
-                raise HTTPException(400, "Ruta fuera de PM_SCAN_ROOTS")
-            if not Path(t.location).exists():
+            scoped = manifests.scoped_path(location)
+            if scoped is None:
+                raise HTTPException(400, "Configura PM_SCAN_ROOTS; ruta fuera de las carpetas permitidas")
+            if not scoped.exists():
                 raise HTTPException(400, "La ruta no existe en el servidor")
+            location = str(scoped)
         case "url":
-            if not re.match(r"^https?://[^\s/]+", t.location):
+            if not re.match(r"^https?://[^\s/]+", location):
                 raise HTTPException(400, "URL no válida (http/https)")
-    tid = _new_target(t.name, t.kind, t.location)
+    tid = _new_target(t.name, t.kind, location)
     if t.kind != "manual":
         engine.trigger([tid], "alta de activo")
     return {"id": tid}

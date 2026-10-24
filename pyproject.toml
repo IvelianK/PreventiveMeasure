@@ -1,6 +1,6 @@
 [project]
 name = "preventivemeasure"
-version = "1.0.0"
+version = "1.0.1"
 description = "Monitor de vulnerabilidades: inventaría tu stack y te avisa de CVE y noticias que te afectan"
 requires-python = ">=3.11"
 readme = "README.md"
