@@ -3,7 +3,7 @@
 ## 1.0.1
 
 - Los activos de tipo ruta creados desde el panel requieren `PM_SCAN_ROOTS` explícito; los ya guardados conservan su inventario mientras no esté configurado.
-- Se omiten enlaces simbólicos durante el recorrido para evitar leer manifiestos fuera del proyecto.
+- Se omiten manifiestos enlazados y no se recorren directorios enlazados para evitar lecturas fuera del proyecto.
 - Los avisos HTTP(S) conectan a la IP validada, no usan el proxy ni siguen redirecciones. Las redes privadas necesitan `PM_ALLOW_PRIVATE_NOTIFICATIONS=1`.
 - Pruebas de rutas restringidas, enlaces simbólicos, DNS fijado y redirecciones de webhooks.
 
