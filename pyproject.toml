@@ -4,11 +4,24 @@ version = "1.0.0"
 description = "Monitor de vulnerabilidades: inventaría tu stack y te avisa de CVE y noticias que te afectan"
 requires-python = ">=3.11"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = ["fastapi>=0.110", "uvicorn>=0.29"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Security",
+    "Framework :: FastAPI",
+]
+
+[project.urls]
+Homepage = "https://github.com/IvelianK/PreventiveMeasure"
+Issues = "https://github.com/IvelianK/PreventiveMeasure/issues"
+Security = "https://github.com/IvelianK/PreventiveMeasure/security/policy"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "hypothesis>=6", "httpx>=0.27"]
+# Starlette reciente usa httpx2 en el TestClient; httpx queda para versiones anteriores
+dev = ["pytest>=8", "hypothesis>=6", "httpx>=0.27", "httpx2>=2"]
 
 [project.scripts]
 preventivemeasure = "preventivemeasure.__main__:main"
@@ -20,5 +33,5 @@ include = ["preventivemeasure*"]
 preventivemeasure = ["static/*"]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]  # 77+: license como expresión SPDX
 build-backend = "setuptools.build_meta"

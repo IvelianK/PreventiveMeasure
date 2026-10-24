@@ -418,6 +418,24 @@ def parser_for(name: str):
     return None
 
 
+def upload_name(filename: str) -> str | None:
+    """Nombre en disco de un fichero subido. Siempre una constante del servidor, nunca el nombre del cliente:
+    así ninguna ruta se construye con datos externos. None = tipo que no sabemos leer."""
+    name = Path(filename).name
+    if known := next((k for k in PARSERS if k == name), None):
+        return known
+    low = name.lower()
+    for suffix, constant in ((".apk", "app.apk"), (".aab", "app.aab"), (".ipa", "app.ipa"), (".json", "sbom.json"),
+                             (".csproj", "project.csproj"), (".fsproj", "project.fsproj"), (".vbproj", "project.vbproj")):
+        if low.endswith(suffix):
+            return constant
+    if re.match(r"^requirements.*\.txt$", low):
+        return "requirements.txt"
+    if low.startswith("dockerfile"):
+        return "Dockerfile"
+    return None
+
+
 def scan_file(p: Path) -> list[dict]:
     if p.suffix.lower() in (".apk", ".aab"):
         return apk_archive(p)

@@ -93,6 +93,8 @@ def check(args) -> int:
 
 
 def main() -> None:
+    # Con salida redirigida (docker logs, systemd) el token de un solo uso se quedaba en el buffer
+    sys.stdout.reconfigure(line_buffering=True)
     ap = argparse.ArgumentParser(prog="preventivemeasure", description="Monitor de vulnerabilidades de tu stack")
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve", help="Servidor con panel web y sondeo periódico")

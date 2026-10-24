@@ -9,17 +9,41 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Un solo job: "tests" es el check obligatorio de la protección de main
   tests:
+    name: tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4, SHA verificado
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, SHA verificado
         with:
           persist-credentials: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6, SHA verificado
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0, SHA verificado
         with:
-          python-version: '3.11'
-      - name: Instalar y probar
+          python-version: |
+            3.11
+            3.x
+      - name: Python 3.11 con las versiones mínimas declaradas
         run: |
-          python -m pip install -e ".[dev]"
-          python -m pytest -q tests
+          python3.11 -m venv /tmp/min
+          /tmp/min/bin/python -m pip install --quiet uv
+          /tmp/min/bin/python -m uv pip install --quiet --python /tmp/min/bin/python --resolution lowest-direct -e ".[dev]"
+          /tmp/min/bin/python -m pip list --format=freeze | grep -iE '^(fastapi|starlette|uvicorn|pydantic)=='
+          # Sin -W error: las combinaciones antiguas avisan dentro de terceros (starlette + anyio)
+          /tmp/min/bin/python -m pytest -q tests
+      - name: Última versión estable de Python con dependencias actuales
+        run: |
+          python -m venv /tmp/latest
+          /tmp/latest/bin/python -m pip install --quiet -e ".[dev]"
+          /tmp/latest/bin/python --version
+          /tmp/latest/bin/python -m pytest -q -W error tests
+      - name: Instalación de usuario (sin extras) y CLI
+        run: |
+          python -m venv /tmp/user
+          /tmp/user/bin/python -m pip install --quiet .
+          /tmp/user/bin/preventivemeasure --help

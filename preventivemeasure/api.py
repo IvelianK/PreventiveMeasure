@@ -282,10 +282,13 @@ def add_target(t: TargetIn):
 
 @app.post("/api/targets/upload", dependencies=A)
 async def upload_target(request: Request, name: str, filename: str):
-    safe = re.sub(r"[^\w.\-]", "_", Path(filename).name)[:120]
-    if not safe or safe.startswith("."):
-        raise HTTPException(400, "Nombre de fichero no válido")
-    dest = db.DATA_DIR / "uploads" / f"{uuid.uuid4().hex}_{safe}"
+    if not (stored := manifests.upload_name(filename)):
+        raise HTTPException(400, "Tipo de fichero no reconocido: sube un lockfile, manifiesto, SBOM, APK, AAB o IPA")
+    # Carpeta aleatoria + nombre constante: el nombre del cliente nunca forma parte de la ruta
+    folder = db.DATA_DIR / "uploads" / uuid.uuid4().hex
+    folder.mkdir(mode=0o700)
+    dest = folder / stored
+    safe = re.sub(r"[^\w.\-]", "_", Path(filename).name)[:120]  # solo para mostrarlo en el panel
     size = 0
     with dest.open("wb") as f:
         async for chunk in request.stream():
@@ -293,6 +296,7 @@ async def upload_target(request: Request, name: str, filename: str):
             if size > MAX_UPLOAD:
                 f.close()
                 dest.unlink(missing_ok=True)
+                folder.rmdir()
                 raise HTTPException(413, "Fichero demasiado grande (máx. 300 MB)")
             f.write(chunk)
     tid = _new_target(name[:120] or safe, "upload", str(dest), {"filename": safe})
@@ -319,7 +323,10 @@ def delete_target(tid: int):
         c.execute("DELETE FROM findings WHERE component_id IN (SELECT id FROM components WHERE target_id=?)", (tid,))
         c.execute("DELETE FROM targets WHERE id=?", (tid,))
     if t[0]["kind"] == "upload":
-        Path(t[0]["location"]).unlink(missing_ok=True)
+        stored = Path(t[0]["location"])
+        stored.unlink(missing_ok=True)
+        if stored.parent.parent == db.DATA_DIR / "uploads":  # carpeta propia de la subida (formato actual)
+            stored.parent.rmdir()
     return {"ok": True}
 
 

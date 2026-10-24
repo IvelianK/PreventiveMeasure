@@ -26,17 +26,51 @@ El proyecto incluye un inventario de prueba con dependencias antiguas para compr
 
 La prioridad combina CVSS, KEV, EPSS y la confianza del cruce. Cada hallazgo trae: versión corregida más cercana, comando de actualización según el ecosistema, acción de CISA, mitigaciones temporales por tipo de debilidad (CWE) y referencias.
 
-## Uso
+## Instalación
 
-Requiere Python 3.11+.
+Requiere Python 3.11 o superior. Lo más sencillo es [pipx](https://pipx.pypa.io), que lo instala aislado y deja el comando en el PATH:
 
 ```bash
-pip install -e .
+pipx install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
 ```
+
+Sin pipx, en un entorno virtual (en Windows el activador es `.venv\Scripts\activate`):
+
+```bash
+python -m venv .venv
+```
+
+```bash
+source .venv/bin/activate
+```
+
+```bash
+python -m pip install https://github.com/IvelianK/PreventiveMeasure/releases/download/v1.0.0/preventivemeasure-1.0.0-py3-none-any.whl
+```
+
+Desde el código fuente:
+
+```bash
+git clone https://github.com/IvelianK/PreventiveMeasure.git
+```
+
+```bash
+cd PreventiveMeasure && python -m pip install .
+```
+
+Cada release lleva atestación de procedencia de GitHub. Para comprobar que el wheel se construyó en este repositorio:
+
+```bash
+gh attestation verify preventivemeasure-1.0.0-py3-none-any.whl -R IvelianK/PreventiveMeasure
+```
+
+## Uso
 
 ```bash
 preventivemeasure serve
 ```
+
+Si el comando no está en el PATH, `python -m preventivemeasure serve` hace lo mismo. Los datos se guardan en `./data` del directorio desde el que lo arrancas; cámbialo con `PM_DATA`.
 
 Abre http://127.0.0.1:8765 con el token que imprime **solo en el primer arranque** (en la BD únicamente queda su hash). Si lo pierdes:
 
@@ -118,7 +152,7 @@ En el primer arranque el token generado aparece en los registros del contenedor.
 ## Tests
 
 ```bash
-pip install -e .[dev]
+python -m pip install -e ".[dev]"
 ```
 
 ```bash

@@ -341,3 +341,23 @@ def test_notification_errors_do_not_return_transport_details(monkeypatch):
     result = notify.dispatch("prueba", "mensaje")
     assert result == [{"channel": "webhook", "ok": False, "error": "No se pudo enviar; consulta el registro."}]
     assert "private-hook" not in recorded[0]
+
+
+def test_upload_never_uses_client_filename():
+    from fastapi.testclient import TestClient
+
+    from preventivemeasure.api import app
+
+    h = {"Authorization": "Bearer test-admin"}
+    body = (FIX / "package-lock.json").read_bytes()
+    with TestClient(app) as client:
+        engine.STATE["last_run"] = 9e12
+        r = client.post("/api/targets/upload?name=demo&filename=..%2F..%2Fpackage-lock.json", headers=h, content=body)
+        assert r.status_code == 200
+        stored = Path(db.rows("SELECT location FROM targets WHERE id=?", (r.json()["id"],))[0]["location"])
+        assert stored.name == "package-lock.json" and stored.parent.parent == db.DATA_DIR / "uploads"
+        r = client.post("/api/targets/upload?name=x&filename=evil.exe", headers=h, content=b"MZ")
+        assert r.status_code == 400
+        assert client.delete(f"/api/targets/{db.rows('SELECT id FROM targets WHERE kind=?', ('upload',))[0]['id']}",
+                             headers=h).status_code == 200
+        assert not stored.parent.exists()
