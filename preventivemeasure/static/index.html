@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>PreventiveMeasure</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Saltar al contenido</a>
+
+  <div id="login" class="login" hidden>
+    <form id="login-form" class="login-card">
+      <div class="brand brand-lg"><span class="brand-mark" aria-hidden="true"></span>PreventiveMeasure</div>
+      <p class="muted">Introduce el token de administración. Lo muestra el servidor al arrancar o <code>python -m preventivemeasure token</code>.</p>
+      <label for="login-token">Token</label>
+      <input id="login-token" type="password" autocomplete="current-password" required spellcheck="false">
+      <p id="login-error" class="error" role="alert"></p>
+      <button class="btn primary" type="submit">Entrar</button>
+    </form>
+  </div>
+
+  <div id="app" class="shell" hidden>
+    <aside class="side">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>PreventiveMeasure</div>
+      <nav aria-label="Secciones">
+        <a href="#/panel" data-view="panel">Panel</a>
+        <a href="#/activos" data-view="activos">Activos</a>
+        <a href="#/hallazgos" data-view="hallazgos">Hallazgos <span id="nav-count" class="pill"></span></a>
+        <a href="#/noticias" data-view="noticias">Noticias</a>
+        <a href="#/ajustes" data-view="ajustes">Ajustes</a>
+        <a href="#/registro" data-view="registro">Registro</a>
+      </nav>
+      <div class="side-foot">
+        <button id="theme" class="btn ghost small" type="button">Tema</button>
+        <button id="logout" class="btn ghost small" type="button">Salir</button>
+      </div>
+    </aside>
+
+    <div class="content">
+      <header class="topbar">
+        <div id="cycle" class="cycle" aria-live="polite"></div>
+        <button id="scan-now" class="btn primary" type="button">Comprobar ahora</button>
+      </header>
+      <main id="main" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <aside id="drawer" class="drawer" hidden aria-modal="true" role="dialog" aria-labelledby="drawer-title">
+    <div class="drawer-panel">
+      <button id="drawer-close" class="btn ghost small drawer-x" type="button" aria-label="Cerrar">Cerrar</button>
+      <div id="drawer-body"></div>
+    </div>
+  </aside>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+</body>
+</html>
