@@ -99,7 +99,7 @@ Los campos secretos de los canales (contraseñas, tokens, URLs de webhook, topic
 | `PM_AGENT_TOKEN` | Token del agente remoto (mejor que `--token`, que se ve en la lista de procesos) |
 | `PM_ALLOW_PRIVATE_NOTIFICATIONS` | `1` permite avisos a redes privadas y HTTP solo hacia esas redes; úsalo únicamente con destinos internos de confianza |
 
-Para vigilar una carpeta desde el panel, define `PM_SCAN_ROOTS` antes de iniciar el servidor. Ejemplo en PowerShell: `$env:PM_SCAN_ROOTS='Z:\GITHUB'`; en Linux/macOS: `export PM_SCAN_ROOTS=/srv/proyectos`. Los activos de tipo ruta ya guardados conservan su inventario, pero no vuelven a escanearse hasta configurar una raíz que los incluya. Los enlaces simbólicos dentro de un proyecto se omiten y dejan el inventario como parcial.
+Para vigilar una carpeta desde el panel, define `PM_SCAN_ROOTS` antes de iniciar el servidor. Ejemplo en PowerShell: `$env:PM_SCAN_ROOTS='Z:\GITHUB'`; en Linux/macOS: `export PM_SCAN_ROOTS=/srv/proyectos`. Los activos de tipo ruta ya guardados conservan su inventario, pero no vuelven a escanearse hasta configurar una raíz que los incluya. Los manifiestos que sean enlaces simbólicos se omiten y dejan el inventario como parcial; no se recorren directorios enlazados.
 
 ### Agente remoto
 

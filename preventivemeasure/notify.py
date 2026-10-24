@@ -54,8 +54,12 @@ def _request(method: str, url: str, body: bytes | None, headers: dict, timeout: 
     try:
         raw.settimeout(timeout)
         raw.connect(address)  # la IP conectada es exactamente la validada; no se resuelve de nuevo
-        connection.sock = (ssl.create_default_context().wrap_socket(raw, server_hostname=host)
-                           if parsed.scheme == "https" else raw)
+        if parsed.scheme == "https":
+            context = ssl.create_default_context()
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            connection.sock = context.wrap_socket(raw, server_hostname=host)
+        else:
+            connection.sock = raw
         path = parsed.path or "/"
         if parsed.query:
             path += "?" + parsed.query

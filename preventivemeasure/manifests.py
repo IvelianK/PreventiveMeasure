@@ -477,11 +477,15 @@ def _wanted(name: str) -> bool:
 
 def scan_path(root: str) -> tuple[list[dict], list[str]]:
     """Recorre un proyecto. Devuelve (componentes, errores); con errores el inventario se trata como parcial."""
-    base = Path(root).resolve()
+    base = Path(root)
     out, errors, files = [], [], []
     roots = [r for r in os.environ.get("PM_SCAN_ROOTS", "").split(os.pathsep) if r.strip()]
     uploads = (db.DATA_DIR / "uploads").resolve()
-    if roots and not (path_allowed(str(base)) or base.is_relative_to(uploads)):
+    try:
+        uploaded = os.path.normcase(os.path.commonpath((os.path.realpath(root), str(uploads)))) == os.path.normcase(str(uploads))
+    except ValueError:  # unidades distintas en Windows
+        uploaded = False
+    if roots and not (path_allowed(root) or uploaded):
         return [], [f"{root}: fuera de PM_SCAN_ROOTS, no se escanea"]
     if base.is_file():
         files = [base]
@@ -490,10 +494,7 @@ def scan_path(root: str) -> tuple[list[dict], list[str]]:
     else:
         walked = 0
         for dirpath, dirnames, filenames in os.walk(base):
-            for d in dirnames:
-                if d not in SKIP_DIRS and (Path(dirpath) / d).is_symlink():
-                    errors.append(f"{Path(dirpath) / d}: enlace simbólico omitido")
-            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not (Path(dirpath) / d).is_symlink()]
+            dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]  # os.walk no sigue enlaces de directorios
             walked += len(dirnames) + len(filenames)
             files += [Path(dirpath, f) for f in filenames if _wanted(f)]
             if walked >= MAX_WALK or len(files) >= MAX_FILES:
